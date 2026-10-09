@@ -14,7 +14,7 @@ MotorPrecosScheduler ──► [precos.fila] ──► PrecoConsumer ──► A
                       Telegram ◄── NotificacaoService ◄── AlertaConsumer ◄── [alertas.fila]
 ```
 
-1. O **scheduler** busca a cotação de cada ativo cadastrado a cada 60 segundos e publica uma mensagem em `precos.fila`.
+1. O **scheduler** busca a cotação de cada ativo cadastrado a cada 60 segundos, consultando a API da [brapi.dev](https://brapi.dev), e publica uma mensagem em `precos.fila`.
 2. O **consumer de preços** recebe a mensagem e chama o avaliador, que atualiza o último preço do ativo e consulta os alertas habilitados daquele ticker.
 3. Quando a condição de um alerta é atendida (e o intervalo mínimo entre disparos já passou), o avaliador publica em `alertas.fila`.
 4. O **consumer de alertas** envia a notificação ao Telegram.
@@ -29,6 +29,7 @@ Como as etapas se comunicam por filas, o coletor, o avaliador e o notificador s�
 - RabbitMQ
 - Docker
 - Lombok
+- API de cotações [brapi.dev](https://brapi.dev)
 - API de bots do Telegram
 
 ## Estrutura do projeto
@@ -53,6 +54,7 @@ com.example.demo
 
 - JDK 17 ou superior
 - Docker
+- Um token gratuito da [brapi.dev](https://brapi.dev) (crie uma conta e copie o token do painel)
 - Um bot do Telegram (crie com o [@BotFather](https://t.me/BotFather) e anote o token)
 - O seu `chat id` (envie uma mensagem ao bot e abra `https://api.telegram.org/bot<TOKEN>/getUpdates`)
 
@@ -79,6 +81,7 @@ Segredos não ficam no código. Defina:
 
 | Variável | Descrição |
 |---|---|
+| `BRAPI_TOKEN` | Token da API de cotações brapi.dev |
 | `TELEGRAM_BOT_TOKEN` | Token do bot, fornecido pelo BotFather |
 | `TELEGRAM_CHAT_ID` | Id do chat que receberá os alertas |
 
@@ -95,6 +98,8 @@ spring.rabbitmq.port=5672
 spring.rabbitmq.username=guest
 spring.rabbitmq.password=guest
 
+brapi.token=${BRAPI_TOKEN}
+
 telegram.bot-token=${TELEGRAM_BOT_TOKEN}
 telegram.chat-id=${TELEGRAM_CHAT_ID}
 ```
@@ -104,6 +109,7 @@ As tabelas são criadas automaticamente pelo Hibernate na primeira execução.
 ### 3. Executar a aplicação
 
 ```bash
+export BRAPI_TOKEN=seu_token_brapi
 export TELEGRAM_BOT_TOKEN=seu_token
 export TELEGRAM_CHAT_ID=seu_chat_id
 ./mvnw spring-boot:run
@@ -166,12 +172,14 @@ Condições disponíveis: `ACIMA_DE` e `ABAIXO_DE`. O ativo precisa estar cadast
 - **`BigDecimal` nos valores de alerta:** evita imprecisão de ponto flutuante em dados monetários.
 - **Intervalo mínimo entre disparos:** o campo `ultimoDisparo` impede que o mesmo alerta notifique a cada ciclo.
 - **Retry limitado nos consumers:** uma falha no envio ao Telegram não deixa a mensagem em loop infinito.
-- **Configuração externa:** token e chat id vêm de variáveis de ambiente.
+- **Configuração externa:** os tokens da brapi e do Telegram e o chat id vêm de variáveis de ambiente.
+- **Cliente HTTP resiliente:** a consulta à brapi tem timeout de conexão e leitura, e os logs de erro registram só o ticker e o status HTTP, para não expor o token.
 
 ## Limitações conhecidas e próximos passos
 
 - Dead Letter Queue para inspecionar mensagens que falharam
 - Concorrência configurável nos consumers para processar muitos ativos em paralelo
+- Respeitar o limite de requisições do plano gratuito da brapi (consultar vários tickers por chamada)
 - Mais tipos de alerta (variação percentual, volume, indicadores)
 - Padrão *outbox* para garantir consistência entre o banco e a publicação na fila
 - Testes automatizados dos services e da avaliação de regras

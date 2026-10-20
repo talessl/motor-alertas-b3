@@ -30,4 +30,6 @@ public class Alerta {
     private boolean habilitado = true;
 
     private LocalDateTime ultimoDisparo;
+    private BigDecimal limiteInferior; // O "piso" do caixote (Suporte)
+    private BigDecimal limiteSuperior; // O "teto" do caixote (Resistência)
 }

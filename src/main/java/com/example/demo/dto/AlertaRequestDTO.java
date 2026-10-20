@@ -4,4 +4,11 @@ import com.example.demo.model.Condicao;
 
 import java.math.BigDecimal;
 
-public record AlertaRequestDTO(String ticker, Condicao condicao, BigDecimal valorAlvo) {}
+public record AlertaRequestDTO(
+        String ticker,
+        Condicao condicao,
+        BigDecimal valorAlvo,
+        Boolean habilitado,
+        BigDecimal limiteInferior,
+        BigDecimal limiteSuperior
+) {}

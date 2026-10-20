@@ -48,20 +48,42 @@ public class AvaliadorAlertaService {
                 alerta.setUltimoDisparo(LocalDateTime.now());
                 alertaRepository.save(alerta);
 
-                String sentido = alerta.getCondicao() == Condicao.ACIMA_DE ? "acima de" : "abaixo de";
-                String descricao = "%s está %s R$ %.2f".formatted(
-                        msg.ticker(), sentido, alerta.getValorAlvo());
+                // Lógica de descrição isolada para manter o método principal limpo
+                String descricao = montarDescricaoNotificacao(alerta, msg);
+
                 alertaProducer.publicar(
                         new AlertaMensagem(msg.ticker(), msg.preco().doubleValue(), descricao));
             }
         }
     }
 
+    // --- MÉTODOS PRIVADOS DE REGRA DE NEGÓCIO ---
+
     private boolean condicaoAtendida(Alerta alerta, BigDecimal preco) {
         return switch (alerta.getCondicao()) {
             case ACIMA_DE -> preco.compareTo(alerta.getValorAlvo()) > 0;
             case ABAIXO_DE -> preco.compareTo(alerta.getValorAlvo()) < 0;
+            case SAIU_DO_CAIXOTE ->
+                // Rompeu o teto OU perdeu o piso
+                    preco.compareTo(alerta.getLimiteSuperior()) > 0 ||
+                            preco.compareTo(alerta.getLimiteInferior()) < 0;
         };
+    }
+
+    private String montarDescricaoNotificacao(Alerta alerta, PrecoMensagem msg) {
+        if (alerta.getCondicao() == Condicao.SAIU_DO_CAIXOTE) {
+            // Descobre para qual lado rompeu para avisar o usuário
+            boolean rompeuParaCima = msg.preco().compareTo(alerta.getLimiteSuperior()) > 0;
+            String direcao = rompeuParaCima ? "PARA CIMA (Resistência rompida)" : "PARA BAIXO (Suporte perdido)";
+
+            return "%s saiu do caixote %s! Preço atual R$ %.2f (Range era R$ %.2f a R$ %.2f)"
+                    .formatted(msg.ticker(), direcao, msg.preco(),
+                            alerta.getLimiteInferior(), alerta.getLimiteSuperior());
+        }
+
+        // Lógica antiga (mantida intacta)
+        String sentido = alerta.getCondicao() == Condicao.ACIMA_DE ? "acima de" : "abaixo de";
+        return "%s está %s R$ %.2f".formatted(msg.ticker(), sentido, alerta.getValorAlvo());
     }
 
     private boolean podeDisparar(Alerta alerta) {

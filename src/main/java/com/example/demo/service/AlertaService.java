@@ -29,6 +29,11 @@ public class AlertaService {
         alerta.setAtivo(ativo);
         alerta.setCondicao(request.condicao());
         alerta.setValorAlvo(request.valorAlvo());
+        alerta.setLimiteInferior(request.limiteInferior());
+        alerta.setLimiteSuperior(request.limiteSuperior());
+        if (request.habilitado() != null) {
+            alerta.setHabilitado(request.habilitado());
+        }
         return alertaRepository.save(alerta);
     }
 

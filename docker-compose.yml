@@ -1,37 +1,53 @@
 services:
-  db-motor-b3:
+  mysql-db:
     image: mysql:8.0
-    container_name: mysql_b3_alerts
+    container_name: b3_mysql
+    restart: always
     environment:
       MYSQL_DATABASE: b3_alerts
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
-      interval: 10s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
       timeout: 5s
       retries: 10
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: rabbitmq_b3_alerts
+    container_name: b3_rabbitmq
+    restart: always
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
       timeout: 5s
       retries: 10
 
+  motor-b3-app:
+    build: .
+    container_name: b3_spring_app
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/b3_alerts
+      - SPRING_DATASOURCE_USERNAME=avnadmin
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - BRAPI_TOKEN=${BRAPI_TOKEN}
+
 volumes:
   mysql_data:
-  rabbitmq_data:
